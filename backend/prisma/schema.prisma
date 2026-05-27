@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+model User {
+  id            String   @id @default(uuid())
+  username      String   @unique
+  full_name     String
+  email         String   @unique
+  password_hash String
+  avatar_url    String?
+  bio           String?
+  role          Role     @default(USER)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  // 🔥 Relations
+  refresh_tokens RefreshToken[]
+  posts          Post[]   // 👈 ADD THIS
+
+  @@index([email])
+  @@index([username])
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  token_hash String   @unique
+  user_id    String
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([token_hash])
+  @@index([user_id])
+  @@map("refresh_tokens")
+}
+
+// 🔥 NEW MODEL
+model Post {
+  id             String   @id @default(uuid())
+  user_id        String
+  caption        String?
+  media_url      String?   // image/video URL
+  likes_count    Int       @default(0)
+  comments_count Int       @default(0)
+  created_at     DateTime  @default(now())
+
+  // 🔥 Relation
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("posts")
+}
