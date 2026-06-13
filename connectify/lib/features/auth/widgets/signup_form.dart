@@ -208,8 +208,11 @@ class _SignupFormState extends State<SignupForm> {
               if (value == null || value.isEmpty) {
                 return AppStrings.passwordRequired;
               }
-              if (value.length < 6) {
+              if (value.length < 8) {
                 return AppStrings.passwordTooShort;
+              }
+              if (!RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)').hasMatch(value)) {
+                return 'Password must contain uppercase, lowercase, and a number';
               }
               return null;
             },

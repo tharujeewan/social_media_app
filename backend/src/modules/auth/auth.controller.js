@@ -128,6 +128,25 @@ const getMe = async (req, res, next) => {
 };
 
 
+/**
+ * @route   POST /auth/firebase
+ * @desc    Authenticate via Firebase ID token (Google Sign-In, etc.)
+ * @access  Public
+ */
+const firebaseLogin = async (req, res, next) => {
+  try {
+    const result = await authService.loginWithFirebase(req.body.id_token);
+    return success(res, {
+      data: result,
+      message: 'Firebase login successful',
+      statusCode: 200,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
 // Export all controller functions
 module.exports = {
   register,
@@ -135,4 +154,5 @@ module.exports = {
   refreshToken,
   logout,
   getMe,
+  firebaseLogin,
 };

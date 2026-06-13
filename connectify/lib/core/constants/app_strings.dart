@@ -41,7 +41,7 @@ class AppStrings {
   static const String emailRequired = 'Please enter your email';
   static const String emailInvalid = 'Please enter a valid email';
   static const String passwordRequired = 'Please enter your password';
-  static const String passwordTooShort = 'Password must be at least 6 characters';
+  static const String passwordTooShort = 'Password must be at least 8 characters';
   static const String fullNameRequired = 'Please enter your full name';
   static const String usernameRequired = 'Please enter a username';
   static const String usernameInvalid = 'Username can only contain letters, numbers, and underscores';

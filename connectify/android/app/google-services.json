@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "126803614927",
+    "project_id": "social-connectify-my",
+    "storage_bucket": "social-connectify-my.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:126803614927:android:14d109dec6650b3b99ebba",
+        "android_client_info": {
+          "package_name": "com.example.connectify"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "126803614927-79miskv1rocc19je36lk2g6sioqm83rr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBuQS4TWsCKhey00bRxiUch1vKLSWbZZBA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "126803614927-79miskv1rocc19je36lk2g6sioqm83rr.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "126803614927-q8kfrf8sotvt5hosvkt4hf42qu0pjcnd.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.connectify"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

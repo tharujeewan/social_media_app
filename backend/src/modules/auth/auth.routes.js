@@ -8,6 +8,7 @@ const {
   refreshToken,
   logout,
   getMe,
+  firebaseLogin,
 } = require('./auth.controller');
 
 // Middleware to validate request body using schemas
@@ -24,6 +25,7 @@ const {
   registerSchema,
   loginSchema,
   refreshSchema,
+  firebaseLoginSchema,
 } = require('./auth.validation');
 
 // Create router instance
@@ -90,6 +92,19 @@ router.get(
   '/me',
   authenticate,                // Verify JWT and set req.user
   getMe                        // Controller function
+);
+
+
+/**
+ * @route   POST /auth/firebase
+ * @desc    Authenticate via Firebase ID token (Google Sign-In, Apple, etc.)
+ * @access  Public
+ */
+router.post(
+  '/firebase',
+  authLimiter,
+  validate(firebaseLoginSchema),
+  firebaseLogin
 );
 
 

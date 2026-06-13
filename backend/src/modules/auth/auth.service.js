@@ -12,6 +12,7 @@ const {
   NotFoundError,
 } = require('../../constants/errors');
 const { sanitizeUser } = require('../../dto/user.dto');
+const { firebaseAdmin } = require('../../config/firebase');
 
 const REFRESH_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -161,6 +162,73 @@ class AuthService {
     } catch {
       // Idempotent: token may already be revoked or never existed
     }
+  }
+
+  /**
+   * Authenticate (or auto-register) a user via a Firebase ID token.
+   *
+   * Flow:
+   *  1. Verify the Firebase ID token with the Admin SDK.
+   *  2. Look up the user by their Firebase UID or email.
+   *  3. If the user doesn't exist, create them automatically.
+   *  4. Issue the app's own access + refresh token pair.
+   *
+   * @param {string} idToken – Firebase ID token from the client.
+   * @returns {Promise<{user: Object, accessToken: string, refreshToken: string}>}
+   */
+  async loginWithFirebase(idToken) {
+    let decodedToken;
+    try {
+      decodedToken = await firebaseAdmin.auth().verifyIdToken(idToken);
+    } catch {
+      throw new AuthenticationError('Invalid Firebase ID token');
+    }
+
+    const { uid, email, name: displayName } = decodedToken;
+
+    if (!email) {
+      throw new AuthenticationError(
+        'Firebase account must have an associated email address'
+      );
+    }
+
+    // Try to find an existing user by email
+    let user = await this.repository.findByEmail(email);
+
+    if (!user) {
+      // Auto-register: derive a unique username from the Firebase UID
+      const baseUsername = email.split('@')[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+      let username = baseUsername.slice(0, 28);
+
+      // Ensure username uniqueness by appending part of the UID if needed
+      const existing = await this.repository.findByUsername(username);
+      if (existing) {
+        username = `${username.slice(0, 24)}${uid.slice(0, 4)}`;
+      }
+
+      // Firebase users have no local password — use a random hash
+      const password_hash = await hashPassword(crypto.randomBytes(32).toString('hex'));
+
+      user = await this.repository.createUser({
+        username,
+        email,
+        password_hash,
+        full_name: displayName || username,
+      });
+    }
+
+    const accessToken = generateAccessToken({ id: user.id, role: user.role });
+    const refreshToken = generateRefreshToken({ id: user.id, role: user.role });
+
+    const tokenHash = sha256(refreshToken);
+    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS);
+    await this.repository.saveRefreshToken(user.id, tokenHash, expiresAt);
+
+    return {
+      user: sanitizeUser(user),
+      accessToken,
+      refreshToken,
+    };
   }
 
   /**

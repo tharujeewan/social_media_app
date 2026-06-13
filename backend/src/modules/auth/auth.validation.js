@@ -49,8 +49,13 @@ const refreshSchema = Joi.object({
     .required(),
 });
 
+const firebaseLoginSchema = Joi.object({
+  id_token: Joi.string().required(),
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
   refreshSchema,
+  firebaseLoginSchema,
 };
