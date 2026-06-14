@@ -55,7 +55,7 @@ app.use(
 );
 
 // 🔹 Health check route
-router.get('/health', (_req, res) => {
+app.get('/health', (_req, res) => {
   res.status(200).json({
     success: true,
     message: 'API is running',
@@ -67,7 +67,7 @@ router.get('/health', (_req, res) => {
 app.use(generalLimiter);
 
 // API routes
-app.use('/api', routes);
+app.use('/api/v1', routes);
 
 // 404 handler for unmatched routes
 app.use(notFoundHandler);
