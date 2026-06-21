@@ -1,0 +1,148 @@
+services:
+
+  # ─────────────────────────────────────────────────────────────
+  # PostgreSQL Database Service
+  # This runs your database in a container
+  # ─────────────────────────────────────────────────────────────
+  db:
+
+    # Use official lightweight PostgreSQL image
+    image: postgres:16-alpine
+
+    # Custom container name (easy to identify)
+    container_name: connectify_db
+
+    # Restart container automatically if it crashes or system reboots
+    restart: unless-stopped
+
+    # Environment variables for PostgreSQL setup
+    environment:
+      # DB username (default = postgres if not provided in .env)
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+
+      # DB password (default = 0772 if not provided)
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-0772}
+
+      # Database name (default = social_media_app)
+      POSTGRES_DB: ${POSTGRES_DB:-social_media_app}
+
+    # Persistent storage (data saved even if container is removed)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    # Map container port to local machine
+    ports:
+      - "5432:5432"
+
+    # Health check to ensure DB is ready before backend starts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-social_media_app}"]
+      interval: 10s        # check every 10 seconds
+      timeout: 5s          # fail if takes more than 5s
+      retries: 5           # retry 5 times before marking unhealthy
+      start_period: 10s    # wait before starting checks
+
+    # Attach service to custom Docker network
+    networks:
+      - connectify_net
+
+
+  # ─────────────────────────────────────────────────────────────
+  # Node.js Backend API Service
+  # ─────────────────────────────────────────────────────────────
+  api:
+
+    # Build image from local Dockerfile
+    build:
+      context: .                 # current directory
+      dockerfile: Dockerfile    # Dockerfile name
+      target: production        # use production stage (multi-stage build)
+
+    # Container name for easy debugging
+    container_name: connectify_api
+
+    # Auto restart policy
+    restart: unless-stopped
+
+    # Wait for database to be healthy before starting API
+    depends_on:
+      db:
+        condition: service_healthy
+
+    # Environment variables passed into container
+    environment:
+
+      # Node environment mode
+      NODE_ENV: ${NODE_ENV:-production}
+
+      # Backend port
+      PORT: ${PORT:-3000}
+
+      # Prisma database connection
+      # IMPORTANT: "db" is service name (NOT localhost)
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-0772}@db:5432/${POSTGRES_DB:-social_media_app}
+
+      # JWT authentication secrets
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-7d}
+
+      # Cloudinary (image upload service)
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+
+      # Security settings
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+
+      # CORS settings (frontend access control)
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+
+      # Rate limiting (prevent abuse)
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-100}
+      AUTH_RATE_LIMIT_MAX_REQUESTS: ${AUTH_RATE_LIMIT_MAX_REQUESTS:-10}
+
+      # Firebase optional configuration
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL:-}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY:-}
+
+    # Expose backend port
+    ports:
+      - "${PORT:-3000}:3000"
+
+    # Mount Prisma folder from local machine into container
+    # (useful for migrations during development)
+    volumes:
+      - ./prisma:/app/prisma:ro
+
+    # Health check for backend API
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+    # Attach to same network as database
+    networks:
+      - connectify_net
+
+
+# ─────────────────────────────────────────────────────────────
+# Persistent storage for PostgreSQL data
+# ─────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    name: connectify_postgres_data
+
+
+# ─────────────────────────────────────────────────────────────
+# Custom Docker network for service communication
+# ─────────────────────────────────────────────────────────────
+networks:
+  connectify_net:
+    name: connectify_network
+    driver: bridge
