@@ -1,14 +1,10 @@
 # ============================================================
-# CI Pipeline for Social Media App Backend
+# CI/CD Pipeline for Social Media App Backend
 # ============================================================
-# Stages: Lint → Test → Build & Push Docker Image
-#
-# Triggers:
-#   - Push to main / master
-#   - Pull requests targeting main / master
+# Stages: Lint → Test → Build & Push → Deploy
 # ============================================================
 
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -16,15 +12,18 @@ on:
   pull_request:
     branches: [main, master]
 
-# Cancel in-progress runs for the same branch / PR
+# cancel in-progress runs for same branch
+# prevents multiple deploys running at same time
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# ──────────────────────────────────────────────
-# Job 1 — Lint
-# ──────────────────────────────────────────────
 jobs:
+
+  # ──────────────────────────────────────────────
+  # Job 1 — Lint
+  # check code quality before running tests
+  # ──────────────────────────────────────────────
   lint:
     name: 🔍 Lint
     runs-on: ubuntu-latest
@@ -36,7 +35,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -50,16 +49,18 @@ jobs:
 
   # ──────────────────────────────────────────────
   # Job 2 — Test
+  # run jest tests against real postgres database
+  # only runs if lint passes
   # ──────────────────────────────────────────────
   test:
     name: 🧪 Test
     runs-on: ubuntu-latest
     needs: lint
 
-    # PostgreSQL service container (mirrors docker-compose)
+    # spin up real postgres for tests
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -72,6 +73,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    # inject test environment variables
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/social_media_test
       NODE_ENV: test
@@ -89,7 +91,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -111,32 +113,41 @@ jobs:
 
   # ──────────────────────────────────────────────
   # Job 3 — Build & Push Docker Image
+  # builds image and pushes to Docker Hub
+  # only runs on push to main (not PRs)
   # ──────────────────────────────────────────────
   docker:
     name: 🐳 Docker Build & Push
     runs-on: ubuntu-latest
     needs: test
 
-    # Only build/push on push to main/master (skip PRs)
+    # skip this job on pull requests
+    # only build and push on actual pushes to main
     if: github.event_name == 'push'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # enable docker buildx for better caching
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # login to Docker Hub using secrets
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # get short commit SHA for image tagging
+      # allows rollback to specific version
       - name: Extract short SHA
         id: sha
         run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
+      # build image from Dockerfile and push to Docker Hub
+      # tagged with both :latest and :commit-sha
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -146,5 +157,46 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/social-media-backend:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/social-media-backend:${{ steps.sha.outputs.short }}
+          # cache layers for faster builds
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ──────────────────────────────────────────────
+  # Job 4 — Deploy to EC2
+  # SSHs into EC2 and pulls latest Docker image
+  # only runs if docker build passes
+  # ──────────────────────────────────────────────
+  deploy:
+    name: 🚀 Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: docker
+
+    # only deploy on push to main
+    if: github.event_name == 'push'
+
+    steps:
+      # SSH into EC2 and run deploy commands
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # go to project folder
+            cd /home/ubuntu/connectify
+
+            # pull latest image from Docker Hub
+            docker compose pull
+
+            # restart containers with new image
+            docker compose up -d --remove-orphans
+
+            # run any new prisma migrations
+            docker compose exec api npx prisma migrate deploy
+
+            # remove old unused images to save disk space
+            docker image prune -f
+
+            # check all containers are running
+            docker compose ps

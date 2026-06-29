@@ -1,10 +1,28 @@
+# Dependencies
 node_modules
+
+# Environment
 .env
 .env.*
 !.env.example
+
+# Git
 .git
 .gitignore
+.github
+
+# Docker
+Dockerfile
+docker-compose.yml
+docker-compose.prod.yml
+
+# Nginx
+nginx.conf
+
+# Logs
 *.log
+
+# Test files — not needed in production
 coverage
 .nyc_output
 test
@@ -12,6 +30,18 @@ tests
 __tests__
 *.test.js
 *.spec.js
+
+# Documentation
 README.md
+
+# Editor/Linting config
 .eslintrc.json
-.github
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Shell scripts
+start.sh
